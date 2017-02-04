@@ -1,0 +1,99 @@
+html {
+	font-family:Arial;
+}
+.Entete{
+	width:665px;
+	height:35px;
+	padding: 25px 25px 25px 10px;
+	border: solid 1px;
+	border-color: rgb(72,89,89);
+	background: linear-gradient(to top,rgb(15,94,119),rgb(22,143,184));
+	color: white;
+	box-shadow: 5px 5px 5px gray;
+	text-shadow: 2px 1px black;
+}
+
+.Tableau1 {
+	width:150px;
+	height:500px;
+	float:left;
+	border-bottom: solid 1px;
+	border-left: solid 1px;
+	border-right: solid 1px;
+	border-color: rgb(116,141,141);
+	background-color:rgb(233,233,233);
+	box-shadow: 5px 5px 5px gray;
+}
+
+.Tableau2{
+	width:500px;
+	height:500px;
+	padding-left:25px;
+	padding-right:25px;
+	background-color:rgb(233,233,233);
+	float:left;
+	border-right: solid 1px;
+	border-bottom: solid 1px;
+	border-color: rgb(116,141,141);
+	box-shadow: 5px 5px 5px gray;
+}
+
+a {
+	color=black;
+}
+
+.Titre {
+	font-size: 200%;
+}
+
+.TitreTableau2{
+	font-size: 150%;
+}
+
+.Bouton {
+	width: 150px;
+	height: 60px;
+	border: none;
+	background-color: rgb(233,233,233);
+	text-align: left;
+	cursor: pointer;
+	font-size: 14px;
+}
+
+.Bouton:hover{
+	background-color: rgb(15,94,119);
+	color: white;
+}
+
+.Contenant {
+  height: 400px;
+  width: 100%;
+  overflow: auto;
+}
+
+table {
+  width: 200px;
+  border-style: groove;
+  border-color: gray;
+  background-color: white;
+}
+
+.TextBox{
+  width:270px;
+
+}
+.TextBox option{
+  width:270px;
+
+}
+#mes {
+	font-style: italic;
+	padding-left = 15px;
+}
+
+#txtMsg
+{
+	width: 495px;
+	height: 300px;
+	resize: none;
+}
