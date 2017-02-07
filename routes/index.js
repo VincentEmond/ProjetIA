@@ -1,7 +1,6 @@
 var express = require('express');
 var router = express.Router();
 
-
 /* GET home page. */
 router.get('/', function(req, res, next) {
 
@@ -14,13 +13,20 @@ router.get('/view', function(req, res, next) {
 });
 
 router.post('/start', function(req, res, next) {
+	
+	var db = res.app.get('firebase').database();
+	var ref = db.ref("jeu");
+	
 	var jeu = {};
 	jeu.etat = "pret";
 	jeu.joueurs = initJoueurs();
 	jeu.tour = Math.floor(Math.random() * 4);
 	console.log(jeu);
 	
-	res.json(jeu);
+	ref.set(jeu);
+	
+	res.status(200);
+	res.end("Success");
 });
 
 function initJoueurs() {

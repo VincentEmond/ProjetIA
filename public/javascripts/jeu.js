@@ -1,7 +1,14 @@
 $(document).ready(function() {
 	$("#NewGame").click(function() {
-		$.post("/start", afficherMains );
+		$.post("/start");
 	});
+	
+	var db = firebase.database();
+	var ref = db.ref("jeu");
+	
+	ref.on('value', function(snapshot) {
+		afficherMains(snapshot.val());
+	}, function(err) {console.log(err)});
 });
 
 function afficherMains(data) {

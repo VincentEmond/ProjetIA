@@ -1,7 +1,21 @@
 <html>
 	<head>
 		<script type="text/javascript" src="javascripts/jquery-2.2.1.min.js"></script> 
-		<script type="text/javascript" src="javascripts/jeu.js"></script> 
+		<script src="https://www.gstatic.com/firebasejs/3.6.2/firebase.js"></script>
+		<script src="https://www.gstatic.com/firebasejs/3.6.2/firebase-app.js"></script>
+		<script src="https://www.gstatic.com/firebasejs/3.6.2/firebase-database.js"></script>
+		<script>
+		  // Initialize Firebase
+		  var config = {
+			apiKey: "AIzaSyB_6_L9gpJ9HOO9OxnIpPOs9k_icrOs7XY",
+			authDomain: "projetia-8a0f1.firebaseapp.com",
+			databaseURL: "https://projetia-8a0f1.firebaseio.com/",
+			storageBucket: "projetia-8a0f1.appspot.com",
+			messagingSenderId: "424733099651"
+		  };
+		  firebase.initializeApp(config);
+		</script>
+		<script type="text/javascript" src="javascripts/jeu.js"></script>		
 	</head>
 	<body>
 		<h1>Jeu</h1>

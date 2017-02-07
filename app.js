@@ -10,6 +10,9 @@ var NodeCache = require('node-cache');
 var routes = require('./routes/index');
 var users = require('./routes/users');
 
+var admin = require("firebase-admin");
+var serviceAccount = require("./projetia-8a0f1-firebase-adminsdk-ucd7m-efbb5596ea.json");
+
 var app = express();
 
 // view engine setup
@@ -27,6 +30,13 @@ app.use(session({secret: 'AmYThR8GGAjB3f71MKyg', resave: false, saveUninitialize
 
 var myCache = new NodeCache();
 app.set('myCache', myCache);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://projetia-8a0f1.firebaseio.com"
+});
+
+app.set("firebase", admin);
 
 app.use('/', routes);
 app.use('/users', users);
