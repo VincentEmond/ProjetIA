@@ -67,13 +67,17 @@ function update_table(data) {
 	
 	data.joueurs.forEach(function(item,indexJoueur) {
 		
-		//Mains
-		item.main.forEach(function(item,indexCarte) {
-			if (data.joueurNum == indexJoueur)
-				$('#mains .j' + (indexJoueur+1)).append(createCard(item.numero, item.genre, item.valide));
-			else
-				$('#mains .j' + (indexJoueur+1)).append(createDos());
-		});
+		if (item.main != undefined && item.main.length != 0) {
+			//Mains
+			item.main.forEach(function(item,indexCarte) {
+				if (data.joueurNum == indexJoueur)
+					$('#mains .j' + (indexJoueur+1)).append(createCard(item.numero, item.genre, item.valide));
+				else
+					$('#mains .j' + (indexJoueur+1)).append(createDos());
+			});
+		}
+
+		
 		
 		//EnJeu
 		if (item.enJeu != undefined && item.enJeu.numero != undefined)
