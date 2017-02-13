@@ -15,11 +15,30 @@
 		  };
 		  firebase.initializeApp(config);
 		</script>
-		<script type="text/javascript" src="javascripts/jeu.js"></script>		
+		<script type="text/javascript" src="javascripts/jeu.js"></script>
+		<link rel="stylesheet" href="stylesheets/style.css">
 	</head>
 	<body>
 		<h1>Jeu</h1>
 		<p id="NewGame">Commencer</p>
-		<div id="tableDeJeu"></div>
+		<p>Je suis le joueur: <span id="numJoueur"></span></p>
+		<p>C'est le tour du joueur: <span id="tour"></span></p>
+		<div id="tableDeJeu" class="invisible">
+			<div id="enJeu">
+				<p><span class="j1"></p>
+				<p><span class="j2"></p>
+				<p><span class="j3"></p>
+				<p><span class="j4"></p>
+			</div>
+			<div id="mains">
+				<p><h2>Joueur 1 Pts: <span id="pts1"></span></h2><span class="j1"></span></p>
+				<p><h2>Joueur 2 Pts: <span id="pts2"></span></h2><span class="j2"></span></p>
+				<p><h2>Joueur 3 Pts: <span id="pts3"></span></h2><span class="j3"></span></p>
+				<p><h2>Joueur 4 Pts: <span id="pts4"></span></h2><span class="j4"></span></p>
+			</div>
+			<textarea rows="15" cols="100" id="jeuStatus">
+				
+			</textarea>
+		</div>
 	</body>
 </html>

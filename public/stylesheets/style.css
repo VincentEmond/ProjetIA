@@ -1,8 +1,35 @@
 body {
-  padding: 50px;
-  font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+
 }
 
 a {
-  color: #00B7FF;
+
+}
+
+.invisible {
+	display: none;
+}
+
+#enJeu p {
+	display: inline;
+}
+
+.card {
+	margin: 10px;
+}
+
+p {
+	margin: 10px;
+}
+
+#mains .card.invalide {
+	cursor: not-allowed;
+}
+
+#mains .card.valide {
+	cursor:pointer;
+}
+
+#mains .card.valide:hover {
+	border-style: solid; 
 }
