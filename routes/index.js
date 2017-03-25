@@ -92,6 +92,70 @@ router.post('/start', function(req, res, next) {
 	res.json({joueur: numJoueur});
 });
 
+//Retourne le numero de joueur (index) au client pour qu'il sache quel joueur il est.
+router.post('/startAI', function(req, res, next) {
+	
+	var db = res.app.get('firebase').database();
+	var ref = db.ref("jeu");
+	var numJoueur;
+	
+	
+	var jeu = getEtat(req);
+	
+	//Si le jeu n'existe pas il faut l'initialiser.
+	if (jeu == undefined)
+	{
+		jeu = {};
+		console.log("Jeu etait undefined");
+		jeu.etat = "READY";
+		jeu.joueurs = initJoueursAI();
+		//C'est le joueur avec le deux de trefle qui commence.
+		jeu.tour = trouveDeuxTrefle(jeu.joueurs);
+		jeu.coeurBrise = false;
+		jeu.compteurTour = 0;
+		console.log(jeu);
+		numJoueur = 0;
+		jeu.placesDispo = [1,2,3];
+
+		if (jeu.compteurTour == 0) {
+			//on active tout et on ilimine
+			activeToutes(jeu.joueurs, true);
+			desactiveAutresJoueurs(jeu.joueurs, jeu.tour);
+			//Pas le droit de jouer la dame de pique au premier tour.
+			desactiveCarte(jeu.joueurs, { numero: 12, genre: "Pique"});
+			//Pas le droit de jouer du coeur au premier tour.
+			desactiveCoeur(jeu.joueurs[jeu.tour].main, true);
+		}
+	}
+	else
+	{
+		//Juste un joueur humain en mode AI
+		res.status(400);
+		var erreur = "/Start appelé lorsqu'on attend pas de joueur.";
+		console.log(erreur);
+		res.end(erreur);
+		return;
+		
+	}
+
+	//Il faut voir si c'est l'IA qui joue en premier
+	while (jeu.joueurs[jeu.tour].IA) {
+		var moveIA = IAJouer(jeu);
+		console.log(moveIA);
+		jeu = jouer(jeu, moveIA);
+		console.log("Tour est maintenant " + jeu.tour);
+		ref.set(jeu);
+		setEtat(req,jeu);
+	}
+	
+	ref.set(jeu);
+	setEtat(req,jeu);
+	
+	
+	res.status(200);
+	res.json({joueur: numJoueur});
+});
+
 router.post("/leave", function(req, res, next) {
 	console.log("/leave appelé");
 	console.log(req.body);
@@ -186,8 +250,17 @@ router.post("/jouer", function(req, res, next) {
 		jeu.tour = (jeu.tour+1)%4
 	
 	//Si le joueur joue du coeur il a brisee le coeur
-	if (move.carte.genre == "Coeur")
+	if (move.carte.genre == "Coeur" && !jeu.coeurBrise) {
 		jeu.coeurBrise = true;
+
+		//Dans le cas echeant on sait que le joueur n'a que du coeur
+		if (jeu.compteurTour == 0) {
+			jeu.joueurs[move.joueur].aDuCarreau = false;
+			jeu.joueurs[move.joueur].aDuPique = false;
+			jeu.joueurs[move.joueur].aDuTrefle = false;
+		}
+	}
+		
 	
 	//On active toutes les cartes et on y va par elimination
 	activeToutes(jeu.joueurs, true);
@@ -200,6 +273,26 @@ router.post("/jouer", function(req, res, next) {
 		jeu.genreDemande = move.carte.genre;
 		//Sinon si c'est le dernier tour d'une round.
 	} else if (jeu.compteurTour == 3) {
+
+		//Le joueur n'a plus de ce genre dans ses mains.
+		if (jeu.genreDemande != move.carte.genre) {
+			console.log("Detecte " + jeu.genreDemande + " != " + move.carte.genre);
+			switch (jeu.genreDemande) {
+				case "Pique":
+					jeu.joueurs[move.joueur].aDuPique = false;
+				break;
+				case "Trefle":
+					jeu.joueurs[move.joueur].aDuTrefle = false;
+				break;
+				case "Coeur":
+					jeu.joueurs[move.joueur].aDuCoeur = false;
+				break;
+				case "Carreau":
+					jeu.joueurs[move.joueur].aDuCarreau = false;
+				break;
+			}
+		}
+
 		//On laisse le temps de montrer a tous le monde le dernier move
 		jeu.etat = "DELAY";
 		ref.set(jeu);
@@ -235,6 +328,25 @@ router.post("/jouer", function(req, res, next) {
 	}
 
 	//On est au début ou au milieu de la round.
+
+	//Le joueur n'a plus de ce genre dans ses mains.
+	if (jeu.genreDemande != move.carte.genre) {
+		console.log("Detecte " + jeu.genreDemande + " != " + move.carte.genre);
+		switch (jeu.genreDemande) {
+			case "Pique":
+				jeu.joueurs[move.joueur].aDuPique = false;
+			break;
+			case "Trefle":
+				jeu.joueurs[move.joueur].aDuTrefle = false;
+			break;
+			case "Coeur":
+				jeu.joueurs[move.joueur].aDuCoeur = false;
+			break;
+			case "Carreau":
+				jeu.joueurs[move.joueur].aDuCarreau = false;
+			break;
+		}
+	}
 	
 	//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
 	//alors on dois desactivé le coeur.
@@ -259,12 +371,228 @@ router.post("/jouer", function(req, res, next) {
 	desactiveAutresJoueurs(jeu.joueurs, jeu.tour);
 	
 	
-	
 	ref.set(jeu);
 	setEtat(req, jeu);
 	res.status(200);
 	res.end("Success");
 });
+
+//Appelé par le client. Il nous envoie une carte et son numero de joueur.
+router.post("/jouerAI", function(req, res, next) {
+	
+	var db = res.app.get('firebase').database();
+	var ref = db.ref("jeu");
+	var move = req.body;
+	var main;
+	
+	var jeu = getEtat(req);
+	
+	//Si le jeu n'est pas dans l'etat READY alors on ne devrait pas être ici.
+	if (jeu == undefined || jeu.etat != "READY") {
+		res.status(400);
+		res.end("Pas le droit de jouer tant que le jeu n'a pas commencé");
+		return;
+	}
+	
+	//si le numero de joueur n'est pas égal au tour dans l'état du jeu alors c'est pas le tour de ce joueur de jouer.
+	if (move.joueur != jeu.tour) {
+		res.status(400);
+		res.end("Ce n'est pas votre tour.");
+		return;
+	}
+	
+	var index;
+	
+	//Prendre la main du joueur qui joue.
+	main = jeu.joueurs[move.joueur].main;
+
+	//Enlever la carte jouée de la main
+	index = trouveCarte(main, move.carte);
+	main.splice(index, 1);
+	
+	//Mettre la carte en jeu
+	jeu.joueurs[move.joueur].enJeu = move.carte;
+	
+	//Avancer le tour de 1 si on est pas le dernier tour de la round.
+	if (jeu.compteurTour != 3)
+		jeu.tour = (jeu.tour+1)%4
+	
+	//Si le joueur joue du coeur il a brisee le coeur
+	if (move.carte.genre == "Coeur" && !jeu.coeurBrise) {
+		jeu.coeurBrise = true;
+
+		//Dans le cas echeant on sait que le joueur n'a que du coeur
+		if (jeu.compteurTour == 0) {
+			jeu.joueurs[move.joueur].aDuCarreau = false;
+			jeu.joueurs[move.joueur].aDuPique = false;
+			jeu.joueurs[move.joueur].aDuTrefle = false;
+		}
+	}
+		
+	
+	//On active toutes les cartes et on y va par elimination
+	activeToutes(jeu.joueurs, true);
+	
+	
+	
+	//C'est le debut d'une round
+	if (jeu.compteurTour == 0 ) {
+		//On initialise le type de carte demandé au type que le premier joueur de la round a joué.
+		jeu.genreDemande = move.carte.genre;
+		//Sinon si c'est le dernier tour d'une round.
+	} else if (jeu.compteurTour == 3) {
+
+		//Le joueur n'a plus de ce genre dans ses mains.
+		if (jeu.genreDemande != move.carte.genre) {
+			console.log("Detecte " + jeu.genreDemande + " != " + move.carte.genre);
+			switch (jeu.genreDemande) {
+				case "Pique":
+					jeu.joueurs[move.joueur].aDuPique = false;
+				break;
+				case "Trefle":
+					jeu.joueurs[move.joueur].aDuTrefle = false;
+				break;
+				case "Coeur":
+					jeu.joueurs[move.joueur].aDuCoeur = false;
+				break;
+				case "Carreau":
+					jeu.joueurs[move.joueur].aDuCarreau = false;
+				break;
+			}
+		}
+
+		//On laisse le temps de montrer a tous le monde le dernier move
+		jeu.etat = "DELAY";
+		ref.set(jeu);
+		setEtat(req, jeu);
+		
+		//Cette fonction s'active après un délai de 5 secondes.
+		setTimeout(function(data) {
+			var resultat = evaluerRamasse(data.jeu);
+			console.log(resultat);
+			var ramasseux = data.jeu.joueurs[resultat.joueur];
+			
+			for (var i=0; i<4; i++) {
+				var laCarte = data.jeu.joueurs[i].enJeu;
+				ramasseux.pile.push(laCarte);
+				data.jeu.joueurs[i].enJeu = {};
+			}
+			
+			ramasseux.pts += resultat.pts;
+
+			//Le tour est a celui qui ramasse
+			console.log("Le joueur qui ramasse est: " + (resultat.joueur + 1));
+			jeu.tour = resultat.joueur;
+
+			//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
+			//alors on dois desactivé le coeur.
+			if (!jeu.coeurBrise && !justeDuCoeur(jeu.joueurs[jeu.tour].main))
+				desactiveCoeur(jeu.joueurs[jeu.tour].main, true);
+
+			data.jeu.etat = "READY";
+			doRestAI(data);
+		}, 5*1000, {request: req, response: res, jeu: jeu, ref: ref} );
+		return;
+	}
+
+	//On est au début ou au milieu de la round.
+
+	//Le joueur n'a plus de ce genre dans ses mains.
+	if (jeu.genreDemande != move.carte.genre) {
+		console.log("Detecte " + jeu.genreDemande + " != " + move.carte.genre);
+		switch (jeu.genreDemande) {
+			case "Pique":
+				jeu.joueurs[move.joueur].aDuPique = false;
+			break;
+			case "Trefle":
+				jeu.joueurs[move.joueur].aDuTrefle = false;
+			break;
+			case "Coeur":
+				jeu.joueurs[move.joueur].aDuCoeur = false;
+			break;
+			case "Carreau":
+				jeu.joueurs[move.joueur].aDuCarreau = false;
+			break;
+		}
+	}
+	
+	//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
+	//alors on dois desactivé le coeur.
+	if (!jeu.coeurBrise && !justeDuCoeur(jeu.joueurs[jeu.tour].main))
+		desactiveCoeur(jeu.joueurs[jeu.tour].main, true);
+
+	//Avance le compteur de tour
+	jeu.compteurTour = (jeu.compteurTour+1)%4;
+	
+	//Si le prochain tour est le tour 2,3 ou 4 de la round
+	if (jeu.compteurTour != 0 ) {
+		//Si le joueur peut repondre au genre demande
+		if (resteDu(jeu.joueurs[jeu.tour].main, jeu.genreDemande)) {
+			desactiveAutresGenres(jeu.joueurs[jeu.tour].main, jeu.genreDemande);
+		} else {
+			//sinon il a le droit de jouer du coeur
+			desactiveCoeur(jeu.joueurs[jeu.tour].main, false)
+		}
+	}
+
+	
+	desactiveAutresJoueurs(jeu.joueurs, jeu.tour);
+	
+
+	//fais jouer l'IA
+	while (jeu.joueurs[jeu.tour].IA) {
+		console.log("AI round intermediaire");
+		var moveIA = IAJouer(jeu);
+		console.log(moveIA);
+		jeu = jouer(jeu, moveIA);
+		console.log("Tour est maintenant " + jeu.tour);
+		ref.set(jeu);
+		setEtat(req,jeu);
+	}
+
+	ref.set(jeu);
+	setEtat(req, jeu);
+	res.status(200);
+	res.end("Success");
+});
+
+function doRestAI(data) {
+	var res = data.response;
+	var req = data.request;
+	var jeu = data.jeu;
+	var ref = data.ref;
+	
+	//Avance le compteur de tour
+	jeu.compteurTour = (jeu.compteurTour+1)%4;
+	
+	//Si le prochain tour est le tour 2,3 ou 4 de la round
+	if (jeu.compteurTour != 0 ) {
+		if (resteDu(jeu.joueurs[jeu.tour].main, jeu.genreDemande)) {
+			desactiveAutresGenres(jeu.joueurs[jeu.tour].main, jeu.genreDemande);
+		}
+	}
+
+	
+	desactiveAutresJoueurs(jeu.joueurs, jeu.tour);
+
+	console.log("Dans doRestAI");
+
+	while (jeu.joueurs[jeu.tour].IA) {
+		console.log("AI round finale");
+		var moveIA = IAJouer(jeu);
+		console.log(moveIA);
+		jeu = jouer(jeu, moveIA);
+		console.log("Tour est maintenant " + jeu.tour);
+		ref.set(jeu);
+		setEtat(req,jeu);
+	}
+	
+	
+	ref.set(jeu);
+	setEtat(req, jeu);
+	res.status(200);
+	res.end("Success");
+}
 
 function doRest(data) {
 	var res = data.response;
@@ -307,6 +635,39 @@ function initJoueurs() {
 		joueurs[j].pts = 0;
 		joueurs[j].IA = false;
 		joueurs[j].pile = [];
+		joueurs[j].aDuCoeur = true;
+		joueurs[j].aDuTrefle = true;
+		joueurs[j].aDuPique = true;
+		joueurs[j].aDuCarreau = true;
+	}
+	
+	//Distribue les cartes en alternant entre chaque joueur.
+	while ((current = paquet.pop()) != undefined) {
+		joueurs[i].main.push(current);
+		i= ++i%4
+	}
+	
+	return joueurs;
+}
+
+function initJoueursAI() {
+	var joueurs = [];
+	var paquet = createPaquet();
+	var current;
+	var i = 0;
+
+	//Initialise les propriétés de chaque objet joueur dans le tableau de joueur.
+	for (var j=0; j<4; j++) {
+		joueurs[j] = {}
+		joueurs[j].main = [];
+		joueurs[j].enJeu = [];
+		joueurs[j].pts = 0;
+		joueurs[j].IA = j > 0;
+		joueurs[j].pile = [];
+		joueurs[j].aDuCoeur = true;
+		joueurs[j].aDuTrefle = true;
+		joueurs[j].aDuPique = true;
+		joueurs[j].aDuCarreau = true;
 	}
 	
 	//Distribue les cartes en alternant entre chaque joueur.
@@ -413,6 +774,19 @@ function activeToutes(joueurs, active) {
 	}
 }
 
+//Retourne un tableau avec les cartes qu'on peut jouer dedans.
+function getCartesValides(main) {
+	var lesMoveValides = [];
+
+	for (var i = 0; i < main.length; i++) {
+		var carte = main[i];
+
+		if (carte.valide)
+			lesMoveValides.push(carte);
+	}
+	return lesMoveValides;
+}
+
 //Retourne le joueur qui ramasse et le nombre de points qu'il se prends.
 function evaluerRamasse(jeu) {
 	var max = 0;
@@ -456,7 +830,8 @@ function createPaquet() {
 				var carte = {
 					genre: item,
 					numero: i,
-					valide: false
+					valide: false,
+					etat: "rien"
 				}
 				paquet.push(carte);
 			}
@@ -485,6 +860,288 @@ function shuffle(array) {
   }
 
   return array;
+}
+
+//fonction de debogage pour s'assurer que les devinettes de l'IA fonctionne correctement.
+function afficherDevinette(jeu) {
+	for (var i=0; i<jeu.joueurs.length; i++) {
+		var joueur = jeu.joueurs[i];
+
+		console.log("Le joueur " + (i+1));
+		console.log("A du coeur: " + joueur.aDuCoeur);
+		console.log("A du carreau: " + joueur.aDuCarreau);
+		console.log("A du pique: " + joueur.aDuPique);
+		console.log("A du trefle: " + joueur.aDuTrefle);
+
+	}
+}
+
+function jouer(etat, move) {
+	var main;
+	
+	var jeu = etat;
+	
+	//Si le jeu n'est pas dans l'etat READY alors on ne devrait pas être ici.
+	if (jeu == undefined || jeu.etat != "READY") {
+		console.log("Bug IA: Pas le droit de jouer tant que le jeu n'a pas commencé");
+		return;
+	}
+	
+	//si le numero de joueur n'est pas égal au tour dans l'état du jeu alors c'est pas le tour de ce joueur de jouer.
+	if (move.joueur != jeu.tour) {
+		console.log("Bug IA: Ce n'est pas votre tour.");
+		return;
+	}
+
+	if (!move.carte.valide) {
+		console.log("Bug IA: La carte jouée est illégale");
+		return;
+	}
+	
+	var index;
+	
+	//Prendre la main du joueur qui joue.
+	main = jeu.joueurs[move.joueur].main;
+
+	//Enlever la carte jouée de la main
+	index = trouveCarte(main, move.carte);
+	main.splice(index, 1);
+	
+	//Mettre la carte en jeu
+	jeu.joueurs[move.joueur].enJeu = move.carte;
+	
+	//Avancer le tour de 1 si on est pas le dernier tour de la round.
+	if (jeu.compteurTour != 3)
+		jeu.tour = (jeu.tour+1)%4
+	
+	//Si le joueur joue du coeur il a brisee le coeur
+	if (move.carte.genre == "Coeur" && !jeu.coeurBrise) {
+		jeu.coeurBrise = true;
+
+		//Dans le cas echeant on sait que le joueur n'a que du coeur
+		if (jeu.compteurTour == 0) {
+			jeu.joueurs[move.joueur].aDuCarreau = false;
+			jeu.joueurs[move.joueur].aDuPique = false;
+			jeu.joueurs[move.joueur].aDuTrefle = false;
+		}
+	}
+	
+	//On active toutes les cartes et on y va par elimination
+	activeToutes(jeu.joueurs, true);
+	
+	
+	
+	//C'est le debut d'une round
+	if (jeu.compteurTour == 0 ) {
+		//On initialise le type de carte demandé au type que le premier joueur de la round a joué.
+		jeu.genreDemande = move.carte.genre;
+		//Sinon si c'est le dernier tour d'une round.
+	} else if (jeu.compteurTour == 3) {
+
+		console.log("Dans last round IA");
+
+		//Le joueur n'a plus de ce genre dans ses mains.
+		if (jeu.genreDemande != move.carte.genre) {
+			switch (jeu.genreDemande) {
+				case "Pique":
+					jeu.joueurs[move.joueur].aDuPique = false;
+				break;
+				case "Trefle":
+					jeu.joueurs[move.joueur].aDuTrefle = false;
+				break;
+				case "Coeur":
+					jeu.joueurs[move.joueur].aDuCoeur = false;
+				break;
+				case "Carreau":
+					jeu.joueurs[move.joueur].aDuCarreau = false;
+				break;
+			}
+		}
+
+		var resultat = evaluerRamasse(jeu);
+		console.log(resultat);
+		var ramasseux = jeu.joueurs[resultat.joueur];
+		
+		for (var i=0; i<4; i++) {
+			var laCarte = jeu.joueurs[i].enJeu;
+			ramasseux.pile.push(laCarte);
+			jeu.joueurs[i].enJeu = {};
+		}
+		
+		ramasseux.pts += resultat.pts;
+
+		//Le tour est a celui qui ramasse
+		console.log("Le joueur qui ramasse est: " + (resultat.joueur + 1));
+		jeu.tour = resultat.joueur;
+
+		//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
+		//alors on dois desactivé le coeur.
+		if (!jeu.coeurBrise && !justeDuCoeur(jeu.joueurs[jeu.tour].main))
+			desactiveCoeur(jeu.joueurs[jeu.tour].main, true);
+
+		//Avance le compteur de tour
+		jeu.compteurTour = (jeu.compteurTour+1)%4;
+		
+		//Si le prochain tour est le tour 2,3 ou 4 de la round
+		if (jeu.compteurTour != 0 ) {
+			if (resteDu(jeu.joueurs[jeu.tour].main, jeu.genreDemande)) {
+				desactiveAutresGenres(jeu.joueurs[jeu.tour].main, jeu.genreDemande);
+			}
+		}
+
+	
+		desactiveAutresJoueurs(jeu.joueurs, jeu.tour);
+
+		return etat;
+	}
+
+	//On est au début ou au milieu de la round.
+
+	//Le joueur n'a plus de ce genre dans ses mains.
+	if (jeu.genreDemande != move.carte.genre) {
+		switch (jeu.genreDemande) {
+			case "pique":
+				jeu.joueurs[move.joueur].aDuPique = false;
+			break;
+			case "trefle":
+				jeu.joueurs[move.joueur].aDuTrefle = false;
+			break;
+			case "coeur":
+				jeu.joueurs[move.joueur].aDuCoeur = false;
+			break;
+			case "carreau":
+				jeu.joueurs[move.joueur].aDuCarreau = false;
+			break;
+		}
+	}
+
+	
+	//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
+	//alors on dois desactivé le coeur.
+	if (!jeu.coeurBrise && !justeDuCoeur(jeu.joueurs[jeu.tour].main))
+		desactiveCoeur(jeu.joueurs[jeu.tour].main, true);
+
+	//Avance le compteur de tour
+	jeu.compteurTour = (jeu.compteurTour+1)%4;
+	
+	//Si le prochain tour est le tour 2,3 ou 4 de la round
+	if (jeu.compteurTour != 0 ) {
+		//Si le joueur peut repondre au genre demande
+		if (resteDu(jeu.joueurs[jeu.tour].main, jeu.genreDemande)) {
+			desactiveAutresGenres(jeu.joueurs[jeu.tour].main, jeu.genreDemande);
+		} else {
+			//sinon il a le droit de jouer du coeur
+			desactiveCoeur(jeu.joueurs[jeu.tour].main, false)
+		}
+	}
+
+	
+	desactiveAutresJoueurs(jeu.joueurs, jeu.tour);
+
+	return etat;
+}
+
+//La fonction d'IA
+//Pour l'instant c'est un algorithme stupide qui choisi un move valide au hasard.
+function IAJouer(etat) {
+	var tour = etat.tour;
+	var main = etat.joueurs[tour].main;
+	var moveValides = getCartesValides(main);
+	var i = getRandomInt(0, moveValides.length);
+	var carteChoisie = moveValides[i];
+	return { joueur: tour, carte: carteChoisie };
+}
+
+//Retourne un nombre entier aleatoire entre min et max peut etre = a min mais est < que max.
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+
+function copierEtat(etat)
+{
+	var copie = {};
+	copie.coeurBrise = etat.coeurBrise;
+	copie.compteurTour = etat.compteurTour;
+	copie.etat = etat.etat;
+	copie.genreDemande = etat.genreDemande;
+	copie.tour = etat.tour;
+	copie.joueurs = [];
+
+	if (etat.joueurs) {
+
+		//Copie chaque joueurs
+		for (var i = 0; i<etat.joueurs.length; i++) {
+			var joueur = {};
+			var courrant = etat.joueurs[i];
+			joueur.IA = courrant.IA;
+			joueur.pts = courrant.pts;
+			joueur.aDuCarreau = courrant.aDuCarreau;
+			joueur.aDuCoeur = courrant.aDuCoeur;
+			joueur.aDuPique = courrant.aDuPique;
+			joueur.aDuTrefle = courrant.aDuTrefle;
+
+			if (courrant.main) {
+				var main = [];
+
+				//Copie la main
+				for (var j = 0; j<courrant.main.length; j++) {
+					var carte = {};
+					var carteCour = courrant.main[j];
+
+					carte.genre = carteCour.genre;
+					carte.numero = carteCour.numero;
+					carte.valide = carteCour.valide;
+					carte.etat = carteCour.etat;
+
+					main.push(carte);
+				}
+
+				joueur.main = main;
+			}
+			
+			//Copie la pile (carte ramassees)
+			if (courrant.pile) {
+				var pile = [];
+
+				for (var j = 0; j<courrant.pile.length; j++) {
+					var carte = {};
+					var carteCour = courrant.pile[j];
+
+					carte.genre = carteCour.genre;
+					carte.numero = carteCour.numero;
+					if (carteCour.valide)
+						carte.valide = carteCour.valide;
+					if (carteCour.etat)
+						carte.etat = carteCour.etat;
+
+					pile.push(carte);
+				}
+
+				joueur.pile = pile;
+			}
+
+			//Copie la carte en jeu.
+			if (courrant.enJeu) {
+				var carte = {};
+
+				carte.genre = courrant.enJeu.genre;
+				carte.numero = courrant.enJeu.numero;
+				if (courrant.enJeu.valide)
+					carte.valide = courrant.enJeu.valide;
+				if (courrant.enJeu.etat)
+					carte.etat = courrant.enJeu.etat;
+				
+				joueur.enJeu = carte;
+			}
+
+			copie.joueurs.push(joueur);
+		}
+
+	}
+
+	return copie;
 }
 
 

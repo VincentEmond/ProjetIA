@@ -6,7 +6,7 @@ $(document).ready(function() {
 	var joueurNum = -1;
 	
 	$("#NewGame").click(function() {
-		$.post("/start", function(data) {
+		$.post("/startAI", function(data) {
 			joueurNum = data.joueur;
 			$("#NewGame").addClass("invisible");
 			$("#tableDeJeu").removeClass("invisible");
@@ -38,7 +38,7 @@ $(document).ready(function() {
 		move.carte.genre = genre;
 		
 		$.ajax({
-			url: '/jouer', 
+			url: '/jouerAI', 
 			type: 'POST', 
 			contentType: 'application/json', 
 			data: JSON.stringify(move)
