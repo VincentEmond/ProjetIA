@@ -26,7 +26,9 @@ $(document).ready(function() {
 		});
 	});
 	
-	
+	$("#Next").click(function() {
+		$.post("/nextMove", function(data) {});
+	});
 	
 	$(document).on('click', '.card.valide', function(obj) {
 		var numero = $(obj.toElement).attr("data-carte-numero");

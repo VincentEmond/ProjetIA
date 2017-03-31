@@ -12,6 +12,13 @@ router.get('/view', function(req, res, next) {
 	
 });
 
+router.options("/jouerAI", function(req, res, next) {
+	res.header('Access-Control-Allow-Origin', '*');
+  	res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+    res.send(200);
+});
+
 //Retourne le numero de joueur (index) au client pour qu'il sache quel joueur il est.
 router.post('/start', function(req, res, next) {
 	
@@ -106,14 +113,12 @@ router.post('/startAI', function(req, res, next) {
 	if (jeu == undefined)
 	{
 		jeu = {};
-		console.log("Jeu etait undefined");
 		jeu.etat = "READY";
 		jeu.joueurs = initJoueursAI();
 		//C'est le joueur avec le deux de trefle qui commence.
 		jeu.tour = trouveDeuxTrefle(jeu.joueurs);
 		jeu.coeurBrise = false;
 		jeu.compteurTour = 0;
-		console.log(jeu);
 		numJoueur = 0;
 		jeu.placesDispo = [1,2,3];
 
@@ -139,14 +144,13 @@ router.post('/startAI', function(req, res, next) {
 	}
 
 	//Il faut voir si c'est l'IA qui joue en premier
-	while (jeu.joueurs[jeu.tour].IA) {
+	/*while (jeu.joueurs[jeu.tour].IA) {
 		var moveIA = IAJouer(jeu);
-		console.log(moveIA);
-		jeu = jouer(jeu, moveIA);
-		console.log("Tour est maintenant " + jeu.tour);
+		jeu = jouer(jeu, moveIA);		
 		ref.set(jeu);
+		console.log("Carte joue.");
 		setEtat(req,jeu);
-	}
+	}*/
 	
 	ref.set(jeu);
 	setEtat(req,jeu);
@@ -301,7 +305,7 @@ router.post("/jouer", function(req, res, next) {
 		//Cette fonction s'active après un délai de 5 secondes.
 		setTimeout(function(data) {
 			var resultat = evaluerRamasse(data.jeu);
-			console.log(resultat);
+	
 			var ramasseux = data.jeu.joueurs[resultat.joueur];
 			
 			for (var i=0; i<4; i++) {
@@ -312,8 +316,7 @@ router.post("/jouer", function(req, res, next) {
 			
 			ramasseux.pts += resultat.pts;
 
-			//Le tour est a celui qui ramasse
-			console.log("Le joueur qui ramasse est: " + (resultat.joueur + 1));
+
 			jeu.tour = resultat.joueur;
 
 			//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
@@ -469,7 +472,7 @@ router.post("/jouerAI", function(req, res, next) {
 		//Cette fonction s'active après un délai de 5 secondes.
 		setTimeout(function(data) {
 			var resultat = evaluerRamasse(data.jeu);
-			console.log(resultat);
+	
 			var ramasseux = data.jeu.joueurs[resultat.joueur];
 			
 			for (var i=0; i<4; i++) {
@@ -480,8 +483,7 @@ router.post("/jouerAI", function(req, res, next) {
 			
 			ramasseux.pts += resultat.pts;
 
-			//Le tour est a celui qui ramasse
-			console.log("Le joueur qui ramasse est: " + (resultat.joueur + 1));
+	
 			jeu.tour = resultat.joueur;
 
 			//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
@@ -540,20 +542,77 @@ router.post("/jouerAI", function(req, res, next) {
 	
 
 	//fais jouer l'IA
-	while (jeu.joueurs[jeu.tour].IA) {
-		console.log("AI round intermediaire");
+	/*while (jeu.joueurs[jeu.tour].IA && !gagnant(jeu)) {
 		var moveIA = IAJouer(jeu);
-		console.log(moveIA);
 		jeu = jouer(jeu, moveIA);
-		console.log("Tour est maintenant " + jeu.tour);
 		ref.set(jeu);
+		console.log("Carte joue.");
 		setEtat(req,jeu);
-	}
+	}*/
 
 	ref.set(jeu);
 	setEtat(req, jeu);
+
+	var gagnants = gagnant(jeu);
+
+	if (gagnants)
+	{
+		console.log("Partie termine le ou le ou les gagnant sont: ");
+		for (var i = 0; i< gagnants.length; i++)
+		 	console.log(gagnants[i]);
+	}
+
+	res.header('Access-Control-Allow-Origin', '*');
+  	res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+
 	res.status(200);
 	res.end("Success");
+});
+
+//Appelé par le client. Il nous envoie une carte et son numero de joueur.
+router.post("/nextMove", function(req, res, next) {
+	try {
+	var db = res.app.get('firebase').database();
+	var ref = db.ref("jeu");
+	
+	var jeu = getEtat(req);
+	
+	//Si le jeu n'est pas dans l'etat READY alors on ne devrait pas être ici.
+	if (jeu == undefined || jeu.etat != "READY") {
+		res.status(400);
+		res.end("Pas le droit de jouer tant que le jeu n'a pas commencé");
+		return;
+	}
+	
+	if (!jeu.joueurs[jeu.tour].IA) {
+		res.status(400);
+		res.end("Pas le tour d'une IA");
+		return;
+	}
+	
+	var moveIA = IAJouer(jeu);
+	jeu = jouer(jeu, moveIA);
+
+	ref.set(jeu);
+	setEtat(req, jeu);
+
+	var gagnants = gagnant(jeu);
+
+	if (gagnants)
+	{
+		console.log("Partie termine le ou le ou les gagnant sont: ");
+		for (var i = 0; i< gagnants.length; i++)
+		 	console.log(gagnants[i]);
+	}
+
+	res.header('Access-Control-Allow-Origin', '*');
+  	res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+
+	res.status(200);
+	res.end("Success");
+	} catch(err) {console.log(err);}
 });
 
 function doRestAI(data) {
@@ -577,15 +636,16 @@ function doRestAI(data) {
 
 	console.log("Dans doRestAI");
 
-	while (jeu.joueurs[jeu.tour].IA) {
+	/*while (jeu.joueurs[jeu.tour].IA) {
 		console.log("AI round finale");
 		var moveIA = IAJouer(jeu);
 		console.log(moveIA);
 		jeu = jouer(jeu, moveIA);
 		console.log("Tour est maintenant " + jeu.tour);
 		ref.set(jeu);
+		console.log("Carte joue.");
 		setEtat(req,jeu);
-	}
+	}*/
 	
 	
 	ref.set(jeu);
@@ -728,6 +788,18 @@ function trouveDeuxTrefle(joueurs) {
 	}
 }
 
+function printMains(etat) {
+	for (var i=0; i<etat.joueurs.length; i++) {
+		var joueur = etat.joueurs[i];
+		console.log("Joueur: " + i);
+		console.log("nbCartes: " + joueur.main.length);
+
+		for (var j=0; j<joueur.main.length; j++) {
+			console.log(joueur.main[j]);
+		}
+	}
+}
+
 //Desactive la carte c passée en paramètre.
 function desactiveCarte(joueurs, c) {
 	for (var i=0; i<4; i++) {
@@ -775,8 +847,9 @@ function activeToutes(joueurs, active) {
 }
 
 //Retourne un tableau avec les cartes qu'on peut jouer dedans.
-function getCartesValides(main) {
+function getCartesValides(etat) {
 	var lesMoveValides = [];
+	var main = etat.joueurs[etat.tour].main;
 
 	for (var i = 0; i < main.length; i++) {
 		var carte = main[i];
@@ -938,7 +1011,7 @@ function jouer(etat, move) {
 		//Sinon si c'est le dernier tour d'une round.
 	} else if (jeu.compteurTour == 3) {
 
-		console.log("Dans last round IA");
+
 
 		//Le joueur n'a plus de ce genre dans ses mains.
 		if (jeu.genreDemande != move.carte.genre) {
@@ -959,7 +1032,6 @@ function jouer(etat, move) {
 		}
 
 		var resultat = evaluerRamasse(jeu);
-		console.log(resultat);
 		var ramasseux = jeu.joueurs[resultat.joueur];
 		
 		for (var i=0; i<4; i++) {
@@ -970,8 +1042,7 @@ function jouer(etat, move) {
 		
 		ramasseux.pts += resultat.pts;
 
-		//Le tour est a celui qui ramasse
-		console.log("Le joueur qui ramasse est: " + (resultat.joueur + 1));
+
 		jeu.tour = resultat.joueur;
 
 		//Si le coeur n'a pas ete brise et que le prochain joueur a autre chose que du coeur.
@@ -1043,10 +1114,336 @@ function jouer(etat, move) {
 
 //La fonction d'IA
 //Pour l'instant c'est un algorithme stupide qui choisi un move valide au hasard.
-function IAJouer(etat) {
+/*function IAJouer(etat) {
 	var tour = etat.tour;
-	var main = etat.joueurs[tour].main;
-	var moveValides = getCartesValides(main);
+	var moveValides = getCartesValides(etat);
+	var i = getRandomInt(0, moveValides.length);
+	var carteChoisie = moveValides[i];
+	return { joueur: tour, carte: carteChoisie };
+}*/
+
+function Node(nbVisites, nbVictoires, joueur, parent, level, choix) {
+	this.nbVisites = nbVisites;
+	this.nbVictoires = nbVictoires;
+	this.parent = parent;
+	this.children = [];
+	this.joueur = joueur;
+	this.etat = null;
+	this.level = level;
+	this.choix = choix;
+
+	this.knowAllStats = function() {
+		if (!this.children || this.children.length == 0)
+			return false;
+		
+		for (var i=0; i<this.children.length; i++) {
+			if (this.children[i].etat == null)
+				return false;
+		}
+
+		return true;
+	}
+	this.selectionUCB = function() {
+		var max = -1;
+		var indexMax = -1;
+		
+		for (var i = 0; i<this.children.length; i++) {
+			var child = this.children[i];
+			var moyenne = child.nbVictoires / child.nbVisites;
+			var ni = child.nbVisites;
+			var n = this.nbVisites;
+			var c = 1.4 //Param d'exploration
+			var ucb = moyenne + c*Math.sqrt((2*Math.log(n))/ni);
+			
+			if (ucb >= max) {
+				max = ucb;
+				indexMax = i;
+			}
+		}
+
+		return indexMax;
+	}
+	this.selectionBest = function() {
+		var max = -1;
+		var indexMax = -1;	
+		
+		for (var i = 0; i<this.children.length; i++) {
+			var child = this.children[i];
+			var moyenne = child.nbVictoires / child.nbVisites;
+			
+			if (moyenne >= max) {
+				max = moyenne;
+				indexMax = i;
+			}
+		}
+
+		return indexMax;
+	}
+	this.getRandomInt = function (min, max) {
+  		min = Math.ceil(min);
+  		max = Math.floor(max);
+  		return Math.floor(Math.random() * (max - min)) + min;
+	}
+	this.selectionExpansion = function() {
+		var indexChoix = 0;
+
+		do {
+			indexChoix = this.getRandomInt(0, this.children.length);
+		} while (this.children[indexChoix].visited());
+
+		return indexChoix;
+	}
+	this.visited = function () {
+		return this.etat != null;
+	}
+	this.setEtat = function(etat) {
+		this.etat = etat;
+		var moveValides = getCartesValides(this.etat);
+
+		for (var i=0; i<moveValides.length; i++) {
+			this.children.push(new Node(0,0,this.etat.tour, this, this.level + 1, i));
+		}
+	}
+	this.printNode = function() {
+		console.log("\tNode: " + this.level + "-" + this.choix + " (" + this.nbVictoires + "/" + this.nbVisites + ") " + "J" + this.joueur);
+	}
+	this.printAllChildrens = function() {
+		for (var i = 0; i<this.children.length; i++) {
+			this.children[i].printNode();
+		}
+	}
+
+}
+
+function IAJouer(etat) {
+	try {
+
+	
+		var tour = etat.tour;
+		
+		var etatRech = copierEtat(etat);		//copies utilisées pour la recherche
+		
+		var it=0;
+
+		//Initialisation de l'arbre de jeu
+
+		var root = new Node(0,0,tour,null, 0, 0); 	//emplacement de départ
+		printMains(etatRech);
+		devinerCartes(etatRech);
+		printMains(etatRech);
+		root.setEtat(etatRech);
+		
+
+		var begin = Date.now();
+
+		//Calcul pendant 5 secondes.
+		while ((Date.now() -  begin) < (5*1000)) {
+			var current = root;
+			current.printNode();
+
+			//Phase de selection
+			it++;
+			console.log("Iteration: " + it);
+			console.log("Phase de selection");
+			console.log("\tTour: " + tour);
+			console.log("\tnbDeChoix: " + current.children.length + " Toutes les stats: " + current.knowAllStats());
+			while (current.knowAllStats()) {
+				var isel = current.selectionUCB();
+				current = current.children[isel];
+				current.printNode();
+			}
+
+			//Phase d'expansion
+			console.log("Phase d'expansion");
+			var etatExpansion = copierEtat(current.etat);
+			var moves = getCartesValides(etatExpansion);
+			var indexExpansion;
+
+			//Si on peut faire l'expansion
+			if (moves && moves.length > 0) {
+				indexExpansion = current.selectionExpansion();
+				etatExpansion = jouer(etatExpansion, { joueur: etatExpansion.tour, carte: moves[indexExpansion] });
+				current.children[indexExpansion].setEtat(etatExpansion);
+				current = current.children[indexExpansion];
+				current.printNode();
+			} 
+			else {
+				console.log("\tOn est dans un etat final. Pas d'expansion.")
+			}
+			
+
+			//Phase de simulation
+			console.log("Phase de simulation");
+			var etatSimulation = copierEtat(current.etat);
+			var lesGagnants = gagnant(etatSimulation);
+
+			while (!lesGagnants) {
+				var move = selectionAleatoire(etatSimulation);
+				etatSimulation = jouer(etatSimulation, move);
+				lesGagnants = gagnant(etatSimulation);
+			}
+
+			console.log("\tLa partie est terminee les joueurs gagnant sont: " + lesGagnants)
+
+			//Phase de propagation arriere
+			console.log("Phase de propagation arriere");
+			while (current != null) {
+				current.nbVisites++;
+				for (var i = 0; i<lesGagnants.length; i++) {
+					if (current.joueur == lesGagnants[i]) {
+						current.nbVictoires++;
+						break;
+					}
+				}
+				current.printNode();
+				current = current.parent;
+					
+			}
+		}
+		
+		var indexIAChoix = root.selectionBest();
+		var moveValidesIA = getCartesValides(root.etat);
+		console.log("All childrens");
+		root.printAllChildrens()
+		console.log("Selected");
+		root.children[indexIAChoix].printNode();
+
+		return { joueur: root.etat.tour, carte: moveValidesIA[indexIAChoix] };
+	}
+	catch (err) {
+		console.log(err);
+	}
+
+}
+
+function devinerCartes(etat) {
+	var paquet = createPaquet();
+	var joueursLengths = [];
+	var carteRestantes = [];
+	var joueurDeuxTrefle = trouveDeuxTrefle(etat.joueurs);
+
+	console.log("DevinerCarte: Je suis joueur: " + etat.tour);
+
+	for (var i=0; i<etat.joueurs.length; i++) {
+		
+		if (etat.tour != i)
+		{
+			joueursLengths.push(etat.joueurs[i].main.length);
+			etat.joueurs[i].main = [];
+		}
+		else
+		{
+			joueursLengths.push(0);
+		}
+			
+	}
+
+	console.log("NbCartes chaque joueurs: " + joueursLengths);
+
+	for (var i=0; i<paquet.length; i++) {
+		if (!carteObservee(etat, paquet[i])) {
+			if (!(paquet[i].genre == "Trefle" && paquet[i].numero == 2))
+				carteRestantes.push(paquet[i]);
+		}
+			
+	}
+
+	if (!carteObservee(etat, {numero: 2, genre:"Trefle"}))	{
+		console.log("Donner deux de trefle a " + joueurDeuxTrefle);
+		etat.joueurs[joueurDeuxTrefle].main.push({genre:"Trefle", numero: 2, valide: false, etat: "rien"});
+		joueursLengths[joueurDeuxTrefle]--;
+		console.log("Nb carte a distribue: " + (carteRestantes.length + 1));
+	}
+	else {
+		console.log("Nb carte a distribue: " + carteRestantes.length);
+	}
+
+
+
+	for (var i=0; i<carteRestantes.length; i++) {
+		var carte = carteRestantes[i];
+		var j = 0;
+
+		
+		switch (carte.genre) {
+			case "Trefle":
+				while (joueursLengths[j] == 0 || !etat.joueurs[j].aDuTrefle) {
+					j++;
+					if (j > 3)
+						console.log("j est out of bound: " + j);
+				}
+			break;
+			case "Coeur":
+				while (joueursLengths[j] == 0 || !etat.joueurs[j].aDuCoeur) {
+						j++;
+						if (j > 3)
+						console.log("j est out of bound: " + j);
+					}
+			break;
+			case "Carreau":
+				while (joueursLengths[j] == 0 || !etat.joueurs[j].aDuCarreau) {
+							j++;
+							if (j > 3)
+						console.log("j est out of bound: " + j);
+						}
+			break;
+			case "Pique":
+				while (joueursLengths[j] == 0 || !etat.joueurs[j].aDuPique) {
+						j++;
+						if (j > 3)
+						console.log("j est out of bound: " + j);
+					}
+			break;
+		}
+
+		etat.joueurs[j].main.push(carte);
+		joueursLengths[j]--;
+		
+	}
+
+	console.log("NbCartes chaque joueurs: " + joueursLengths);
+
+}
+
+function carteObservee(etat, carte) {
+
+	for (var i=0; i<etat.joueurs.length; i++) {
+		var joueur = etat.joueurs[i];
+
+		if(joueur.enJeu && 
+		joueur.enJeu.numero == carte.numero && 
+		joueur.enJeu.genre == carte.genre) {
+			return true;
+		}
+
+		if (joueur.pile) {
+			for (var j=0; j<joueur.pile.length; j++) {
+				var pileCarte = joueur.pile[j];
+
+				if (pileCarte.genre == carte.genre && pileCarte.numero == carte.numero)
+					return true;
+			}
+		}
+
+		if (i == etat.tour) {
+			if (joueur.main) {
+				for (var j = 0; j<joueur.main.length; j++) {
+					var pileCarte = joueur.main[j];
+
+					if (pileCarte.genre == carte.genre && pileCarte.numero == carte.numero)
+						return true;
+				}
+			}
+		}
+	}
+
+	return false;
+
+}
+
+function selectionAleatoire(etat) {
+	var tour = etat.tour;
+	var moveValides = getCartesValides(etat);
 	var i = getRandomInt(0, moveValides.length);
 	var carteChoisie = moveValides[i];
 	return { joueur: tour, carte: carteChoisie };
@@ -1057,6 +1454,67 @@ function getRandomInt(min, max) {
   min = Math.ceil(min);
   max = Math.floor(max);
   return Math.floor(Math.random() * (max - min)) + min;
+}
+
+//Retourne une liste de gagnant. Il peut y avoir plusieurs joueur a egalite. Si le jeu n'est pas termine
+//retourne false. Si le jeu est termine regarde aussi si un joueur a fais un controle.
+function gagnant(etat) {
+
+	var joueurs = etat.joueurs;
+	var indexControle = -1;
+	var min = 9999;
+	var indexMin = [];
+	var acum = 0;
+
+	for (var i=0; i<joueurs.length; i++) {
+		
+		if (!joueurs[i].pile)
+			return false;
+		else
+			acum += joueurs[i].pile.length;
+
+		if (joueurs[i].pts == 26)
+			indexControle = i;
+	}
+
+	//La partie est termine
+	if (acum == 52) {
+		if (indexControle != -1) {
+			for (var i=0; i<joueurs.length; i++) {
+				if (i == indexControle)
+					joueurs[i].pts = 0;
+				else
+					joueurs[i].pts = 26;
+			}
+		}
+
+		//Calcule le ou les gagnant.
+		for (var i=0; i<joueurs.length; i++) {		
+			if (joueurs[i].pts < min) {
+				indexMin = [];
+				indexMin.push(i);
+				min = joueurs[i].pts;
+			} 
+			else if (joueurs[i].pts == min) {
+				indexMin.push(i);
+			}
+		}
+
+		return indexMin;
+	}
+
+	return false;
+
+}
+
+function wait(ms) {
+	var begin = Date.now();
+	var mtn = Date.now();
+
+	while ((mtn - begin) < ms) {
+		mtn = Date.now();
+	}
+		
 }
 
 function copierEtat(etat)
